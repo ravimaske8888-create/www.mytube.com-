@@ -1,0 +1,137 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Independent user account profile on mytube keyed by Firebase Auth UID (private PII isolated per user)",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "email": { "type": "string", "format": "email", "minLength": 3, "maxLength": 254 },
+        "handle": { "type": "string", "minLength": 2, "maxLength": 64 },
+        "avatarUrl": { "type": "string", "maxLength": 1000 },
+        "channelDescription": { "type": "string", "maxLength": 1000 },
+        "subscribersCount": { "type": "number" },
+        "joinedDate": { "type": "string", "maxLength": 120 },
+        "cloudStorageTier": { "type": "string", "maxLength": 120 },
+        "createdAt": { "type": "object" },
+        "updatedAt": { "type": "object" }
+      },
+      "required": ["id", "name", "email", "handle", "subscribersCount", "joinedDate", "cloudStorageTier", "createdAt", "updatedAt"]
+    },
+    "UserSettings": {
+      "title": "UserSettings",
+      "description": "Per-user isolated app settings stored strictly under the user's UID",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "uploadWifiOnly": { "type": "boolean" },
+        "hdUpload": { "type": "boolean" },
+        "pushNotifications": { "type": "boolean" },
+        "subscriptionsAlert": { "type": "boolean" },
+        "darkTheme": { "type": "boolean" },
+        "language": { "type": "string", "enum": ["en", "hi"] },
+        "updatedAt": { "type": "object" }
+      },
+      "required": ["userId", "uploadWifiOnly", "hdUpload", "pushNotifications", "subscriptionsAlert", "darkTheme", "language", "updatedAt"]
+    },
+    "WatchHistoryItem": {
+      "title": "WatchHistoryItem",
+      "description": "Per-user isolated video watch history entry",
+      "type": "object",
+      "properties": {
+        "videoId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "userId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "videoTitle": { "type": "string", "maxLength": 200 },
+        "videoType": { "type": "string", "enum": ["video", "short"] },
+        "watchedAt": { "type": "object" }
+      },
+      "required": ["videoId", "userId", "videoTitle", "videoType", "watchedAt"]
+    },
+    "UserUpload": {
+      "title": "UserUpload",
+      "description": "Per-user isolated uploaded video or short record",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "userId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "title": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "description": { "type": "string", "maxLength": 2000 },
+        "channelName": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "channelHandle": { "type": "string", "minLength": 2, "maxLength": 64 },
+        "views": { "type": "number" },
+        "duration": { "type": "string", "maxLength": 32 },
+        "videoUrl": { "type": "string", "minLength": 1, "maxLength": 2048 },
+        "backupVideoUrl": { "type": "string", "maxLength": 2048 },
+        "thumbnailUrl": { "type": "string", "maxLength": 2048 },
+        "type": { "type": "string", "enum": ["video", "short"] },
+        "likes": { "type": "number" },
+        "dislikes": { "type": "number" },
+        "quality": { "type": "string", "maxLength": 32 },
+        "storageSizeMb": { "type": "number" },
+        "cloudSyncStatus": { "type": "string", "enum": ["synced", "local", "syncing"] },
+        "createdAt": { "type": "object" },
+        "updatedAt": { "type": "object" }
+      },
+      "required": ["id", "userId", "title", "channelName", "channelHandle", "views", "videoUrl", "type", "likes", "dislikes", "createdAt", "updatedAt"]
+    },
+    "Video": {
+      "title": "Video",
+      "description": "Public video or short item metadata",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "title": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "description": { "type": "string", "maxLength": 2000 },
+        "channelName": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "channelHandle": { "type": "string", "minLength": 2, "maxLength": 64 },
+        "views": { "type": "number" },
+        "duration": { "type": "string", "maxLength": 32 },
+        "videoUrl": { "type": "string", "minLength": 1, "maxLength": 2048 },
+        "type": { "type": "string", "enum": ["video", "short"] },
+        "likes": { "type": "number" },
+        "dislikes": { "type": "number" },
+        "uploadedBy": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "createdAt": { "type": "object" },
+        "updatedAt": { "type": "object" }
+      },
+      "required": ["id", "title", "videoUrl", "type", "uploadedBy", "createdAt", "updatedAt"]
+    },
+    "AdminRecord": {
+      "title": "AdminRecord",
+      "description": "Server-managed admin allowlist document",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string", "format": "email", "maxLength": 254 },
+        "grantedAt": { "type": "object" }
+      },
+      "required": ["email"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "Private independent user profile keyed by Firebase Auth UID"
+    },
+    "/users/{userId}/settings/{settingId}": {
+      "schema": "UserSettings",
+      "description": "User's private personal app preferences"
+    },
+    "/users/{userId}/history/{historyId}": {
+      "schema": "WatchHistoryItem",
+      "description": "User's private watch history items"
+    },
+    "/users/{userId}/uploads/{uploadId}": {
+      "schema": "UserUpload",
+      "description": "User's private uploaded videos and shorts"
+    },
+    "/videos/{videoId}": {
+      "schema": "Video",
+      "description": "Public video and shorts metadata catalog"
+    },
+    "/admins/{userId}": {
+      "schema": "AdminRecord",
+      "description": "Read-only admin verification marker"
+    }
+  }
+}

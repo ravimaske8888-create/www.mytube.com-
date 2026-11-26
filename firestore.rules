@@ -1,0 +1,331 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global safety net: default deny everything
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // ==================== PRIMITIVE HELPERS ====================
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null && request.auth.token.email_verified == true;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        request.auth.token.email == 'ravimaske8888@gmail.com' ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    // ==================== VALIDATION BLUEPRINTS ====================
+    function isValidUserProfile(data, userId) {
+      return data.keys().hasAll([
+          'id', 'name', 'email', 'handle', 'subscribersCount',
+          'joinedDate', 'cloudStorageTier', 'createdAt', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'id', 'name', 'email', 'handle', 'avatarUrl', 'channelDescription',
+          'subscribersCount', 'joinedDate', 'cloudStorageTier', 'createdAt', 'updatedAt'
+        ]) &&
+        data.id == userId &&
+        isValidId(data.id) &&
+        data.name is string && data.name.size() >= 1 && data.name.size() <= 120 &&
+        data.email is string && data.email.size() >= 3 && data.email.size() <= 254 &&
+        data.handle is string && data.handle.size() >= 2 && data.handle.size() <= 64 &&
+        (!('avatarUrl' in data) || (data.avatarUrl is string && data.avatarUrl.size() <= 1000)) &&
+        (!('channelDescription' in data) || (data.channelDescription is string && data.channelDescription.size() <= 1000)) &&
+        data.subscribersCount is number && data.subscribersCount >= 0 &&
+        data.joinedDate is string && data.joinedDate.size() <= 120 &&
+        data.cloudStorageTier is string && data.cloudStorageTier.size() <= 120 &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidUserSettings(data, userId) {
+      return data.keys().hasAll([
+          'userId', 'uploadWifiOnly', 'hdUpload', 'pushNotifications',
+          'subscriptionsAlert', 'darkTheme', 'language', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'userId', 'uploadWifiOnly', 'hdUpload', 'pushNotifications',
+          'subscriptionsAlert', 'darkTheme', 'language', 'updatedAt'
+        ]) &&
+        data.userId == userId &&
+        isValidId(data.userId) &&
+        data.uploadWifiOnly is bool &&
+        data.hdUpload is bool &&
+        data.pushNotifications is bool &&
+        data.subscriptionsAlert is bool &&
+        data.darkTheme is bool &&
+        data.language is string && data.language in ['en', 'hi'] &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidHistoryItem(data, userId, historyId) {
+      return data.keys().hasAll(['videoId', 'userId', 'videoTitle', 'videoType', 'watchedAt']) &&
+        data.keys().hasOnly(['videoId', 'userId', 'videoTitle', 'videoType', 'watchedAt']) &&
+        data.videoId == historyId &&
+        isValidId(data.videoId) &&
+        data.userId == userId &&
+        isValidId(data.userId) &&
+        data.videoTitle is string && data.videoTitle.size() <= 200 &&
+        data.videoType is string && data.videoType in ['video', 'short'] &&
+        data.watchedAt is timestamp;
+    }
+
+    function isValidUserUpload(data, userId, uploadId) {
+      return data.keys().hasAll([
+          'id', 'userId', 'title', 'channelName', 'channelHandle',
+          'views', 'videoUrl', 'type', 'likes', 'dislikes', 'createdAt', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'id', 'userId', 'title', 'description', 'channelName', 'channelHandle',
+          'views', 'duration', 'videoUrl', 'backupVideoUrl', 'thumbnailUrl',
+          'type', 'likes', 'dislikes', 'quality', 'storageSizeMb', 'cloudSyncStatus',
+          'createdAt', 'updatedAt'
+        ]) &&
+        data.id == uploadId &&
+        isValidId(data.id) &&
+        data.userId == userId &&
+        isValidId(data.userId) &&
+        data.title is string && data.title.size() >= 1 && data.title.size() <= 200 &&
+        (!('description' in data) || (data.description is string && data.description.size() <= 2000)) &&
+        data.channelName is string && data.channelName.size() >= 1 && data.channelName.size() <= 120 &&
+        data.channelHandle is string && data.channelHandle.size() >= 2 && data.channelHandle.size() <= 64 &&
+        data.views is number && data.views >= 0 &&
+        (!('duration' in data) || (data.duration is string && data.duration.size() <= 32)) &&
+        data.videoUrl is string && data.videoUrl.size() >= 1 && data.videoUrl.size() <= 2048 &&
+        (!('backupVideoUrl' in data) || (data.backupVideoUrl is string && data.backupVideoUrl.size() <= 2048)) &&
+        (!('thumbnailUrl' in data) || (data.thumbnailUrl is string && data.thumbnailUrl.size() <= 2048)) &&
+        data.type is string && data.type in ['video', 'short'] &&
+        data.likes is number && data.likes >= 0 &&
+        data.dislikes is number && data.dislikes >= 0 &&
+        (!('quality' in data) || (data.quality is string && data.quality.size() <= 32)) &&
+        (!('storageSizeMb' in data) || (data.storageSizeMb is number && data.storageSizeMb >= 0)) &&
+        (!('cloudSyncStatus' in data) || (data.cloudSyncStatus is string && data.cloudSyncStatus in ['synced', 'local', 'syncing'])) &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidVideo(data, videoId) {
+      return data.keys().hasAll([
+          'id', 'title', 'channelName', 'channelHandle', 'views',
+          'videoUrl', 'type', 'likes', 'dislikes', 'uploadedBy', 'createdAt', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'id', 'title', 'description', 'channelName', 'channelHandle', 'views',
+          'duration', 'videoUrl', 'type', 'likes', 'dislikes', 'uploadedBy', 'createdAt', 'updatedAt'
+        ]) &&
+        data.id == videoId &&
+        isValidId(data.id) &&
+        data.title is string && data.title.size() >= 1 && data.title.size() <= 200 &&
+        (!('description' in data) || (data.description is string && data.description.size() <= 2000)) &&
+        data.channelName is string && data.channelName.size() >= 1 && data.channelName.size() <= 120 &&
+        data.channelHandle is string && data.channelHandle.size() >= 2 && data.channelHandle.size() <= 64 &&
+        data.views is number && data.views >= 0 &&
+        (!('duration' in data) || (data.duration is string && data.duration.size() <= 32)) &&
+        data.videoUrl is string && data.videoUrl.size() >= 1 && data.videoUrl.size() <= 2048 &&
+        data.type is string && data.type in ['video', 'short'] &&
+        data.likes is number && data.likes >= 0 &&
+        data.dislikes is number && data.dislikes >= 0 &&
+        isValidId(data.uploadedBy) &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    // ==================== COLLECTION RULES ====================
+    // 1. Admin markers (client cannot self-elevate)
+    match /admins/{userId} {
+      allow get: if isValidId(userId) && isOwner(userId);
+      allow list, create, update, delete: if false;
+    }
+
+    // 2. User profiles (strictly isolated per user + admin overview)
+    match /users/{userId} {
+      allow get: if isValidId(userId) && (isOwner(userId) || isAdmin());
+      allow list: if isSignedIn() && request.auth.token.email == 'ravimaske8888@gmail.com';
+      allow create: if isValidId(userId) &&
+        isOwner(userId) &&
+        isValidUserProfile(incoming(), userId) &&
+        incoming().email == request.auth.token.email &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time;
+      allow update: if isValidId(userId) &&
+        isOwner(userId) &&
+        isValidUserProfile(incoming(), userId) &&
+        incoming().id == userId &&
+        incoming().email == request.auth.token.email &&
+        incoming().updatedAt == request.time &&
+        (
+          (
+            existing().keys().hasAll([
+              'id', 'name', 'email', 'handle', 'subscribersCount',
+              'joinedDate', 'cloudStorageTier', 'createdAt', 'updatedAt'
+            ]) &&
+            existing().keys().hasOnly([
+              'id', 'name', 'email', 'handle', 'avatarUrl', 'channelDescription',
+              'subscribersCount', 'joinedDate', 'cloudStorageTier', 'createdAt', 'updatedAt'
+            ]) &&
+            existing().createdAt is timestamp &&
+            incoming().id == existing().id &&
+            incoming().email == existing().email &&
+            incoming().createdAt == existing().createdAt &&
+            incoming().diff(existing()).affectedKeys().hasOnly([
+              'name', 'handle', 'avatarUrl', 'channelDescription', 'subscribersCount', 'updatedAt'
+            ])
+          ) ||
+          (
+            !(
+              existing().keys().hasAll([
+                'id', 'name', 'email', 'handle', 'subscribersCount',
+                'joinedDate', 'cloudStorageTier', 'createdAt', 'updatedAt'
+              ]) &&
+              existing().keys().hasOnly([
+                'id', 'name', 'email', 'handle', 'avatarUrl', 'channelDescription',
+                'subscribersCount', 'joinedDate', 'cloudStorageTier', 'createdAt', 'updatedAt'
+              ]) &&
+              existing().createdAt is timestamp
+            ) &&
+            (
+              (('createdAt' in existing()) && existing().createdAt is timestamp && incoming().createdAt == existing().createdAt) ||
+              (!('createdAt' in existing()) || !(existing().createdAt is timestamp)) && incoming().createdAt == request.time
+            )
+          )
+        );
+      allow delete: if false;
+
+      // 2a. Per-user private settings (zero cross-user visibility)
+      match /settings/{settingId} {
+        allow get: if isValidId(userId) && isValidId(settingId) && isOwner(userId) && settingId == 'preferences';
+        allow list: if isValidId(userId) && isOwner(userId);
+        allow create: if isValidId(userId) && isValidId(settingId) && settingId == 'preferences' &&
+          isOwner(userId) &&
+          exists(/databases/$(database)/documents/users/$(userId)) &&
+          isValidUserSettings(incoming(), userId) &&
+          incoming().updatedAt == request.time;
+        allow update: if isValidId(userId) && isValidId(settingId) && settingId == 'preferences' &&
+          isOwner(userId) &&
+          exists(/databases/$(database)/documents/users/$(userId)) &&
+          isValidUserSettings(incoming(), userId) &&
+          incoming().userId == userId &&
+          incoming().updatedAt == request.time &&
+          (
+            (
+              existing().keys().hasAll([
+                'userId', 'uploadWifiOnly', 'hdUpload', 'pushNotifications',
+                'subscriptionsAlert', 'darkTheme', 'language', 'updatedAt'
+              ]) &&
+              existing().keys().hasOnly([
+                'userId', 'uploadWifiOnly', 'hdUpload', 'pushNotifications',
+                'subscriptionsAlert', 'darkTheme', 'language', 'updatedAt'
+              ]) &&
+              incoming().userId == existing().userId &&
+              incoming().diff(existing()).affectedKeys().hasOnly([
+                'uploadWifiOnly', 'hdUpload', 'pushNotifications',
+                'subscriptionsAlert', 'darkTheme', 'language', 'updatedAt'
+              ])
+            ) ||
+            !(
+              existing().keys().hasAll([
+                'userId', 'uploadWifiOnly', 'hdUpload', 'pushNotifications',
+                'subscriptionsAlert', 'darkTheme', 'language', 'updatedAt'
+              ]) &&
+              existing().keys().hasOnly([
+                'userId', 'uploadWifiOnly', 'hdUpload', 'pushNotifications',
+                'subscriptionsAlert', 'darkTheme', 'language', 'updatedAt'
+              ])
+            )
+          );
+        allow delete: if isValidId(userId) && isValidId(settingId) && isOwner(userId);
+      }
+
+      // 2b. Per-user private watch history (zero cross-user visibility)
+      match /history/{historyId} {
+        allow get: if isValidId(userId) && isValidId(historyId) && isOwner(userId);
+        allow list: if isValidId(userId) && isOwner(userId);
+        allow create: if isValidId(userId) && isValidId(historyId) &&
+          isOwner(userId) &&
+          exists(/databases/$(database)/documents/users/$(userId)) &&
+          isValidHistoryItem(incoming(), userId, historyId) &&
+          incoming().watchedAt == request.time;
+        allow update: if isValidId(userId) && isValidId(historyId) &&
+          isOwner(userId) &&
+          exists(/databases/$(database)/documents/users/$(userId)) &&
+          isValidHistoryItem(incoming(), userId, historyId) &&
+          incoming().userId == existing().userId &&
+          incoming().videoId == existing().videoId &&
+          incoming().watchedAt == request.time &&
+          incoming().diff(existing()).affectedKeys().hasOnly(['videoTitle', 'videoType', 'watchedAt']);
+        allow delete: if isValidId(userId) && isValidId(historyId) && isOwner(userId);
+      }
+
+      // 2c. Per-user private uploads (zero cross-user visibility)
+      match /uploads/{uploadId} {
+        allow get: if isValidId(userId) && isValidId(uploadId) && isOwner(userId);
+        allow list: if isValidId(userId) && isOwner(userId);
+        allow create: if isValidId(userId) && isValidId(uploadId) &&
+          isOwner(userId) &&
+          exists(/databases/$(database)/documents/users/$(userId)) &&
+          isValidUserUpload(incoming(), userId, uploadId) &&
+          incoming().createdAt == request.time &&
+          incoming().updatedAt == request.time;
+        allow update: if isValidId(userId) && isValidId(uploadId) &&
+          isOwner(userId) &&
+          exists(/databases/$(database)/documents/users/$(userId)) &&
+          isValidUserUpload(incoming(), userId, uploadId) &&
+          incoming().id == existing().id &&
+          incoming().userId == existing().userId &&
+          incoming().createdAt == existing().createdAt &&
+          incoming().updatedAt == request.time &&
+          incoming().diff(existing()).affectedKeys().hasOnly([
+            'title', 'description', 'channelName', 'channelHandle',
+            'views', 'likes', 'dislikes', 'quality', 'type', 'updatedAt'
+          ]);
+        allow delete: if isValidId(userId) && isValidId(uploadId) && isOwner(userId);
+      }
+    }
+
+    // 3. Public videos catalog (read-only for visitors, strict owner write/delete)
+    match /videos/{videoId} {
+      allow get: if isValidId(videoId);
+      allow list: if true;
+      allow create: if isValidId(videoId) &&
+        isSignedIn() &&
+        isValidVideo(incoming(), videoId) &&
+        incoming().uploadedBy == request.auth.uid &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time;
+      allow update: if isValidId(videoId) &&
+        isSignedIn() &&
+        isValidVideo(incoming(), videoId) &&
+        incoming().id == existing().id &&
+        incoming().uploadedBy == existing().uploadedBy &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        (
+          isAdmin() ||
+          (existing().uploadedBy == request.auth.uid && incoming().diff(existing()).affectedKeys().hasOnly([
+            'title', 'description', 'type', 'views', 'likes', 'dislikes', 'updatedAt'
+          ]))
+        );
+      allow delete: if isValidId(videoId) && isSignedIn() && (isAdmin() || existing().uploadedBy == request.auth.uid);
+    }
+  }
+}

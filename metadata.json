@@ -1,0 +1,6 @@
+{
+  "name": "mytube",
+  "description": "mytube - Next-gen video sharing platform with unlimited cloud storage, video uploads, shorts, and Google account integration.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
